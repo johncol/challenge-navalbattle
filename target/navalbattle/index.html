@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Test html5 websockets</title>
+	<link rel="stylesheet" href="css/reset.css">
+	<link rel="stylesheet" href="css/main.css">
+	<script src="js/modernizr.js"></script>
+</head>
+<body>
+	<div id="main-container">
+		<h1>Try websockets on tomcat 7.0.29</h1>
+		<p>This tomcat version only supports chrome and firefox</p>
+		<form>
+			<textarea name="message" id="message" placeholder="write here your message"></textarea>
+			<button type="button">Send</button>
+		</form>
+		<output for="message" id="response"></output>
+	</div>
+	<script src="js/jquery-1.9.1.js"></script>
+	<script>
+	var response = $('#response');
+	var message = $('#message');
+	if (!Modernizr.websockets) {
+		response.html('Sorry :( your browser does not support websockets').css('color','#C00');
+	} else {
+		var URL = 'ws://localhost:8080/navalbattle/test';
+		var websocket = new WebSocket(URL);
+		$(websocket).on({
+			open: function(event) {
+				console.log('websocket connection opened');
+			},
+			message: function(event) {
+				var websocketResponse = event.originalEvent.data;
+				console.log(websocketResponse);
+				response.html(websocketResponse);
+			},
+			error: function(event) {
+				console.log('websocket error');
+			},
+			close: function(event) {
+				console.log('websocket connection closed');
+			}
+		});
+		$('form').on('click', 'button', function(event){
+			websocket.send(message.val());
+		});
+	}
+	</script>
+</body>
+</html>
