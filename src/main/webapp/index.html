@@ -2,50 +2,226 @@
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
-	<title>Test html5 websockets</title>
+	<title>Batalla Naval 5</title>
 	<link rel="stylesheet" href="css/reset.css">
-	<link rel="stylesheet" href="css/main.css">
+	<link rel="stylesheet" href="css/naval-battle.css">
 	<script src="js/modernizr.js"></script>
 </head>
 <body>
-	<div id="main-container">
-		<h1>Try websockets on tomcat 7.0.29</h1>
-		<p>This tomcat version only supports chrome and firefox</p>
+<div id="main-container">
+
+	<h1 id="title">Batalla Naval</h1>
+
+	<section id="player-info">
 		<form>
-			<textarea name="message" id="message" placeholder="write here your message"></textarea>
-			<button type="button">Send</button>
+			<label for="name">Nombre</label>
+			<input type="text" id="name">
+			<button type="button" id="go">Entrar</button>
 		</form>
-		<output for="message" id="response"></output>
-	</div>
-	<script src="js/jquery-1.9.1.js"></script>
-	<script>
-	var response = $('#response');
-	var message = $('#message');
-	if (!Modernizr.websockets) {
-		response.html('Sorry :( your browser does not support websockets').css('color','#C00');
-	} else {
-		var URL = 'ws://localhost:8080/navalbattle/test';
-		var websocket = new WebSocket(URL);
+		<section id="message"></section>
+	</section>
+
+	<section id="game">
+		<canvas id="naval-battle" width="300" height="300" style="display: none;"></canvas>
+	</section>
+
+</div>
+<script src="js/jquery-1.9.1.js"></script>
+<script>
+
+var COORDINATES_DEFINITION = 'D',
+	ALL_PLAYERS_ONLINE = 'O',
+	ALL_PLAYERS_HAVE_SHIPS = 'S',
+	SPACES_PER_SIDE = 3.0,
+	SHIPS = 3,
+	BACKGROUND_COLOR = '#FFFFFF',
+	SQUARE_COLOR = '#EEEEEE';
+
+var GRID = {
+	strokeColor: '#000',
+	strokeWidth: 0.3
+};
+
+if (!Modernizr.websockets) {
+	$('#player-info').html('<p>Sorry :( your browser does not support websockets</p>').css('color','#C00');
+} else {
+	var canvas = document.querySelector('#naval-battle'),
+		qCanvas = $('#naval-battle'),
+		ctx = canvas.getContext('2d'),
+        squareSize = canvas.width / SPACES_PER_SIDE,
+        shipsCoords = [];
+
+    var	form = $('form'),
+		username = $('#name'),
+		button = $('#go'),
+		messageContainer = $('#message').hide();
+
+	var URL = 'ws://localhost:8080/navalbattle/game',
+		websocket;
+
+	function connectServer() {
+		websocket = new WebSocket(URL + '?username=' + username.val());
 		$(websocket).on({
 			open: function(event) {
-				console.log('websocket connection opened');
+				showMessage('Esperando al segundo jugador...');
 			},
+
 			message: function(event) {
 				var websocketResponse = event.originalEvent.data;
-				console.log(websocketResponse);
-				response.html(websocketResponse);
+				if (websocketResponse === ALL_PLAYERS_ONLINE) {
+					hideMessage();
+					showGame();
+				} else if (websocketResponse === ALL_PLAYERS_HAVE_SHIPS) {
+					// quitar mensaje de espera
+				} 
 			},
+
 			error: function(event) {
-				console.log('websocket error');
+				showMessage('Ocurrio un error :(');
 			},
+
 			close: function(event) {
-				console.log('websocket connection closed');
+				showMessage('Conexion terminada');
 			}
 		});
-		$('form').on('click', 'button', function(event){
-			websocket.send(message.val());
-		});
 	}
-	</script>
+
+    function initCanvas() {
+    	ctx.fillStyle = BACKGROUND_COLOR;
+    	ctx.fillRect(0, 0, canvas.width, canvas.height);
+    	paintGrid();
+    }
+
+	function paintGrid() {
+		ctx.lineWidth = GRID.strokeWidth;
+        ctx.strokeStyle = GRID.strokeColor;
+    	var distance = {
+    		x: squareSize, 
+    		y: squareSize
+    	};
+        var x = distance.x,
+            y = distance.y;
+        while (x < canvas.width) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
+            ctx.closePath();
+            ctx.stroke();
+            x += distance.x;
+        }
+        while (y < canvas.height) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.closePath();
+            ctx.stroke();
+            y += distance.y;
+        }
+    }
+
+    function paintSquare(position, clean) {
+    	ctx.fillStyle = clean ? BACKGROUND_COLOR : SQUARE_COLOR;
+    	ctx.fillRect(position.x * squareSize + 1, position.y * squareSize + 1, squareSize - 2, squareSize - 2);
+    }
+
+    function canvasClickCoordinates(event) {
+    	var posX, posY, offsetX, offsetY;
+		if (event.offsetX === undefined) {
+			offsetX = event.pageX-qCanvas.offset().left;
+			offsetY = event.pageY-qCanvas.offset().top;
+		} else {
+			offsetX = event.offsetX;
+			offsetY = event.offsetY;
+		}
+        posX = Math.floor(offsetX/squareSize);
+        posY = Math.floor(offsetY/squareSize);
+        return {
+        	x: posX,
+        	y: posY
+        };
+    }
+
+    function saveShipCoordinates(event) {
+		var pos = canvasClickCoordinates(event),
+			selectedCoord = String(pos.x) + String(pos.y);
+        if (coordinateIsNotSelected(shipsCoords, selectedCoord)) {
+        	shipsCoords = addShipCoord(shipsCoords, selectedCoord);
+        	paintSquare(pos, false);
+        } else {
+        	shipsCoords = removeShipCoord(shipsCoords, selectedCoord);
+        	paintSquare(pos, true);
+        }
+        if (shipsCoords.length === SHIPS) {
+        	canvas.removeEventListener('click', saveShipCoordinates);
+        	sendShipCoordinates();
+        }
+    }
+
+    function sendShipCoordinates() {
+    	var shipCoordinatesMessage = COORDINATES_DEFINITION;
+    	for (var i = 0; i < SHIPS; i++) {
+    		shipCoordinatesMessage += '-' + shipsCoords[i];
+    	}
+    	console.log('shipCoordinatesMessage: '+ shipCoordinatesMessage);
+		websocket.send(shipCoordinatesMessage);
+    }
+
+	function showGame() {
+		qCanvas.show();
+		showPlayerName();
+		canvas.addEventListener('click', saveShipCoordinates);
+	}
+
+	function showPlayerName() {
+		var user = $('<h2>')
+			.html('Jugador: ')
+			.append($('<strong>').html(username.val()));
+		$('#player-info')
+			.children('form')
+			.hide()
+			.end()
+			.append(user);
+	}
+
+    function coordinateIsNotSelected(coords, newCoord) {
+    	return $.inArray(newCoord, coords) === -1;
+    }
+
+    function addShipCoord(coords, newCoord) {
+    	coords.push(newCoord);
+    	return coords;
+    }
+
+    function removeShipCoord(coords, oldCoord) {
+    	coords = $.grep(coords, function(coord) {
+    		return coord != oldCoord;
+    	});
+    	return coords;
+    }
+
+	function showMessage(message) {
+		messageContainer.hide().html(message).show();
+	}
+
+	function hideMessage() {
+		messageContainer.hide();
+	}
+
+	function registerPlayer(event) {
+		username.attr('disabled', true);
+		button.attr('disabled', true);
+		showMessage('Conectando con el servidor...');
+		connectServer();
+	}
+
+	button.on('click', registerPlayer);
+	form.on('submit', function(event) {
+		event.preventDefault();
+		registerPlayer(event);
+	});
+
+	initCanvas();
+}
+</script>
 </body>
 </html>
