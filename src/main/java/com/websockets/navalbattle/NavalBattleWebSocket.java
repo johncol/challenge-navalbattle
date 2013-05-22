@@ -58,17 +58,14 @@ public class NavalBattleWebSocket extends WebSocketServlet {
 					registerPlayer(websocket);
 				} else {
 					websocket.close(NO_MORE_PLAYERS_ALLOWED, null);
-					log("No more players allowed");
 				}
-			} catch (IOException e) {
-				log("Error writing message with websocket");
+			} catch (IOException ignore) {
 			}
 		}
 
 		private void registerPlayer(WsOutbound outbound) throws IOException {
 			Player player = new Player(connectionId, username);
 			connections.put(player, this);
-			log("Player " + player + " connected");
 			if (player1 == null) {
 				player1 = player;
 			} else {
@@ -77,7 +74,6 @@ public class NavalBattleWebSocket extends WebSocketServlet {
 			if (!morePlayersAllowed()) {
 				sendMessage(getSocket(player1), ALL_PLAYERS_ONLINE);
 				sendMessage(getSocket(player2), ALL_PLAYERS_ONLINE);
-				log("All players connected");
 			}
 		}
 
@@ -85,10 +81,8 @@ public class NavalBattleWebSocket extends WebSocketServlet {
 		protected void onTextMessage(CharBuffer data) throws IOException {
 			String message = data.toString();
 			Player player = getPlayer();
-			log("Player " + player + " sent message -> " + message);
 			String[] coords = message.split(MESSAGE_SEPARATOR);
 			if (isCoordsDefinition(message)) {
-				log("Coordinates definition");
 				savePlayerShips(player, coords);
 				setUpPlayers++;
 				if (playersReadyWithShips()) {
@@ -96,7 +90,6 @@ public class NavalBattleWebSocket extends WebSocketServlet {
 					playerPlays(player1);
 				}
 			} else if (isAttack(message)) {
-				log("Attack:");
 				Player otherPlayer = getOtherPlayer();
 				boolean endGame = attack(player, otherPlayer, coords);
 				if (!endGame) {
@@ -127,7 +120,6 @@ public class NavalBattleWebSocket extends WebSocketServlet {
 				int y = Integer.parseInt(String.valueOf(coord.charAt(1)));
 				Ship ship = new Ship(x, y);
 				player.addShips(ship);
-				log("Player " + player + " has new ship: " + ship);
 			}
 		}
 
@@ -135,12 +127,10 @@ public class NavalBattleWebSocket extends WebSocketServlet {
 			for (NavalBattleConnection connection : connections.values()) {
 				sendMessage(connection.getWsOutbound(), ALL_PLAYERS_HAVE_SHIPS);
 			}
-			log("All players have their ships");
 		}
 
 		private boolean attack(Player player, Player otherPlayer, String[] coords) throws IOException {
 			String coord = coords[1];
-			log(String.format("Player '%s' is attacking player '%s' in position %s", player.getName(), otherPlayer.getName(), coord));
 			int x = Integer.parseInt(String.valueOf(coord.charAt(0)));
 			int y = Integer.parseInt(String.valueOf(coord.charAt(1)));
 			Ship ship = otherPlayer.hasShipInPosition(x, y);
@@ -150,15 +140,11 @@ public class NavalBattleWebSocket extends WebSocketServlet {
 				ship.sink();
 				resultPlayer = createAttackResponseMessage(true, false, coord);
 				resultOtherPlayer = createAttackResponseMessage(true, true, coord);
-				log("Ship down: " + ship);
 				endBattle = gameOver(otherPlayer);
 			} else {
 				resultPlayer = createAttackResponseMessage(false, false, coord);
 				resultOtherPlayer = createAttackResponseMessage(false, true, coord);
-				log("Shot missed");
 			}
-			log(resultPlayer);
-			log(resultOtherPlayer);
 			sendMessage(getSocket(player), resultPlayer);
 			sendMessage(getSocket(otherPlayer), resultOtherPlayer);
 			return endBattle;
@@ -215,12 +201,9 @@ public class NavalBattleWebSocket extends WebSocketServlet {
 		protected void onClose(int status) {
 			if (!gameCompleted) {
 				try {
-					Player player = getPlayer();
 					Player otherPlayer = getOtherPlayer();
-					log("Player " + player + " left the game");
 					sendMessage(getSocket(otherPlayer), ENEMY_LEFT);
-				} catch (IOException e) {
-					log("Error sending close message");
+				} catch (IOException ignore) {
 				} catch (NullPointerException ignore) {
 				}
 			}
@@ -229,10 +212,6 @@ public class NavalBattleWebSocket extends WebSocketServlet {
 			gameCompleted = false;
 			player1 = null;
 			player2 = null;
-		}
-
-		public void log(String message) {
-			System.out.println("LOG: " + message);
 		}
 
 	}
