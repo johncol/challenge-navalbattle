@@ -47,4 +47,26 @@ public class Player {
 		return null;
 	}
 
+	public boolean hasShipsAlive() {
+		for (Ship ship : ships) {
+			if (ship.isAlive()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public boolean equals(Object other) {
+		if (other == null || !(other instanceof Player)) {
+			return false;
+		}
+		Player otherPlayer = (Player) other;
+		return otherPlayer.getId().equals(this.getId());
+	}
+	
+	@Override
+	public String toString() {
+		return name;
+	}
+
 }

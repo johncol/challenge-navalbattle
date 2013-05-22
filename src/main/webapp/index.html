@@ -21,18 +21,34 @@
 		<section id="message"></section>
 	</section>
 
-	<section id="game">
-		<canvas id="naval-battle" width="300" height="300" style="display: none;"></canvas>
-	</section>
+	<div id="canvas-container">
+		<section>
+			<canvas id="naval-battle-p1" width="300" height="300" style="display: none;"></canvas>
+		</section>
+		<section style="display: none;">
+			<canvas id="naval-battle-p2" width="300" height="300" style="display: none;"></canvas>
+		</section>
+	</div>
 
 </div>
 <script src="js/jquery-1.9.1.js"></script>
 <script>
 
 var COORDINATES_DEFINITION = 'D',
+	ATTACK = 'A',
 	ALL_PLAYERS_ONLINE = 'O',
 	ALL_PLAYERS_HAVE_SHIPS = 'S',
-	SPACES_PER_SIDE = 3.0,
+	YOU_PLAY = 'P',
+	YOU_WAIT = 'W',
+	HIT = 'H',
+	MISSED = 'M',
+	YOU_ARE_THE_TARGET = 'T',
+	YOU_ARE_NOT_THE_TARGET = 'N',
+	ENEMY_LEFT = 'EL',
+	WINNER = 'WINNER',
+	LOSER = 'LOSER';
+
+var SPACES_PER_SIDE = 3.0,
 	SHIPS = 3,
 	BACKGROUND_COLOR = '#FFFFFF',
 	SQUARE_COLOR = '#EEEEEE';
@@ -45,16 +61,30 @@ var GRID = {
 if (!Modernizr.websockets) {
 	$('#player-info').html('<p>Sorry :( your browser does not support websockets</p>').css('color','#C00');
 } else {
-	var canvas = document.querySelector('#naval-battle'),
-		qCanvas = $('#naval-battle'),
-		ctx = canvas.getContext('2d'),
-        squareSize = canvas.width / SPACES_PER_SIDE,
-        shipsCoords = [];
+	var canvasP1 = document.querySelector('#naval-battle-p1'),
+		canvasP2 = document.querySelector('#naval-battle-p2'),
+		qCanvasP1 = $('#naval-battle-p1'),
+		qCanvasP2 = $('#naval-battle-p2'),
+        squareSize = canvasP1.width / SPACES_PER_SIDE,
+        shipsCoords = [],
+		isYourTurn = false;
 
     var	form = $('form'),
 		username = $('#name'),
 		button = $('#go'),
 		messageContainer = $('#message').hide();
+
+	var shipImage = (function() {
+		var img = new Image();
+		img.src = 'imgs/ship100-3.png';
+		return img;
+	})();
+
+	var bombImage = (function() {
+		var img = new Image();
+		img.src = 'imgs/boom100.png';
+		return img;
+	})();
 
 	var URL = 'ws://localhost:8080/navalbattle/game',
 		websocket;
@@ -68,12 +98,44 @@ if (!Modernizr.websockets) {
 
 			message: function(event) {
 				var websocketResponse = event.originalEvent.data;
+				var responseCode = websocketResponse.charAt(0);
 				if (websocketResponse === ALL_PLAYERS_ONLINE) {
-					hideMessage();
-					showGame();
+					showMessage('Ahora selecciona ' + SHIPS + ' lugares para tus barcos');
+					showOwnGame();
 				} else if (websocketResponse === ALL_PLAYERS_HAVE_SHIPS) {
-					// quitar mensaje de espera
-				} 
+					showMessage('Los dos jugadores estan listos');
+					showEnemyGame();
+				} else if (websocketResponse === YOU_PLAY) {
+					isYourTurn = true;
+					showMessage('Es tu turno');
+				} else if (websocketResponse === YOU_WAIT) {
+					isYourTurn = false;
+					showMessage('Es turno de tu enemigo');
+				} else if (websocketResponse === ENEMY_LEFT) {
+					showMessage('¡Ganaste! El enemigo abandono');
+					endGame();
+				} else if (websocketResponse === WINNER) {
+					showMessage('¡Haz destruido los ' + SHIPS + ' barcos de tu enemigo! ¡Eres el ganador!');
+					endGame();
+				} else if (websocketResponse === LOSER) {
+					showMessage('¡Han destruido tus ' + SHIPS + ' barcos! Eres el perdedor');
+					endGame();
+				} else if (responseCode === HIT || responseCode === MISSED) {
+					var target = websocketResponse.charAt(2);
+					var pos = {
+						x: 	Number(websocketResponse.charAt(4)),
+						y: 	Number(websocketResponse.charAt(5))
+					};
+					if (target === YOU_ARE_THE_TARGET) {
+						paintBomb(canvasP1, pos);
+					} else if (responseCode === HIT) {
+						paintSquare(canvasP2, pos, true);
+						paintShip(canvasP2, pos);
+						paintBomb(canvasP2, pos);
+					}
+				} else {
+					console.log(websocketResponse);
+				}
 			},
 
 			error: function(event) {
@@ -81,18 +143,20 @@ if (!Modernizr.websockets) {
 			},
 
 			close: function(event) {
-				showMessage('Conexion terminada');
+				console.log('Conexion terminada');
 			}
 		});
 	}
 
-    function initCanvas() {
+    function initCanvas(canvas) {
+    	var ctx = canvas.getContext('2d');
     	ctx.fillStyle = BACKGROUND_COLOR;
     	ctx.fillRect(0, 0, canvas.width, canvas.height);
-    	paintGrid();
+    	paintGrid(canvas);
     }
 
-	function paintGrid() {
+	function paintGrid(canvas) {
+		var ctx = canvas.getContext('2d');
 		ctx.lineWidth = GRID.strokeWidth;
         ctx.strokeStyle = GRID.strokeColor;
     	var distance = {
@@ -119,12 +183,23 @@ if (!Modernizr.websockets) {
         }
     }
 
-    function paintSquare(position, clean) {
+    function paintSquare(canvas, position, clean) {
+    	var ctx = canvas.getContext('2d');
     	ctx.fillStyle = clean ? BACKGROUND_COLOR : SQUARE_COLOR;
     	ctx.fillRect(position.x * squareSize + 1, position.y * squareSize + 1, squareSize - 2, squareSize - 2);
     }
 
-    function canvasClickCoordinates(event) {
+    function paintShip(canvas, position) {
+    	var ctx = canvas.getContext('2d');
+    	ctx.drawImage(shipImage, position.x * squareSize + 1, position.y * squareSize + 1);
+    }
+
+    function paintBomb(canvas, position) {
+    	var ctx = canvas.getContext('2d');
+    	ctx.drawImage(bombImage, position.x * squareSize + 1, position.y * squareSize + 1);
+    }
+
+    function canvasClickCoordinates(event, qCanvas) {
     	var posX, posY, offsetX, offsetY;
 		if (event.offsetX === undefined) {
 			offsetX = event.pageX-qCanvas.offset().left;
@@ -142,19 +217,31 @@ if (!Modernizr.websockets) {
     }
 
     function saveShipCoordinates(event) {
-		var pos = canvasClickCoordinates(event),
+		var pos = canvasClickCoordinates(event, qCanvasP1),
 			selectedCoord = String(pos.x) + String(pos.y);
         if (coordinateIsNotSelected(shipsCoords, selectedCoord)) {
         	shipsCoords = addShipCoord(shipsCoords, selectedCoord);
-        	paintSquare(pos, false);
+        	paintShip(canvasP1, pos);
         } else {
         	shipsCoords = removeShipCoord(shipsCoords, selectedCoord);
-        	paintSquare(pos, true);
+        	paintSquare(canvasP1, pos, true);
         }
         if (shipsCoords.length === SHIPS) {
-        	canvas.removeEventListener('click', saveShipCoordinates);
+        	canvasP1.removeEventListener('click', saveShipCoordinates);
+        	qCanvasP1.css('cursor', 'default');
+        	showMessage('Esperando al otro jugador...');
         	sendShipCoordinates();
         }
+    }
+
+    function catchAttackCoordinates(event) {
+    	if (isYourTurn) {
+			isYourTurn = false;
+			var pos = canvasClickCoordinates(event, qCanvasP2),
+				selectedCoord = String(pos.x) + String(pos.y);
+			paintBomb(canvasP2, pos);
+			websocket.send(ATTACK + '-' + selectedCoord);
+    	}
     }
 
     function sendShipCoordinates() {
@@ -166,10 +253,16 @@ if (!Modernizr.websockets) {
 		websocket.send(shipCoordinatesMessage);
     }
 
-	function showGame() {
-		qCanvas.show();
+	function showOwnGame() {
+		qCanvasP1.show();
 		showPlayerName();
-		canvas.addEventListener('click', saveShipCoordinates);
+		canvasP1.addEventListener('click', saveShipCoordinates);
+	}
+
+	function showEnemyGame() {
+		qCanvasP2.parent('section').show().end().show();
+		$('#canvas-container').children('section').css('width', '49%');
+		canvasP2.addEventListener('click', catchAttackCoordinates);
 	}
 
 	function showPlayerName() {
@@ -214,13 +307,23 @@ if (!Modernizr.websockets) {
 		connectServer();
 	}
 
+	function endGame() {
+		canvasP1.removeEventListener('click', saveShipCoordinates);
+		canvasP2.removeEventListener('click', catchAttackCoordinates);
+		qCanvasP2.css('cursor', 'default');
+		websocket = null;
+	}
+
 	button.on('click', registerPlayer);
 	form.on('submit', function(event) {
 		event.preventDefault();
-		registerPlayer(event);
+		if (username.val().trim() != '') {
+			registerPlayer(event);
+		}
 	});
 
-	initCanvas();
+	initCanvas(canvasP1);
+	initCanvas(canvasP2);
 }
 </script>
 </body>

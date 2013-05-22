@@ -45,16 +45,24 @@ body, form, form * {
 }
 #message {
 	background: #EEE;
-	border-radius: 4px;
-	color: rgba(50, 50, 50, .8);
+	border-radius: 15px;
+	color: rgba(50, 50, 50, .6);
 	text-shadow: 0 1px 0 #fff;
 	line-height: 1.5;
 	position: absolute;
 	top: 0;
 	right: 0;
-	padding: 1em 1.5em;
-	margin: 10px;
+	padding: 1.2em 2em;
+	margin: 20px;
 	z-index: 100;
+}
+#canvas-container {
+	width: 750px;
+	margin-left: 20px;
+}
+#canvas-container section {
+	width: 99%;
+	display: inline-block;
 }
 canvas {
 	display: block;

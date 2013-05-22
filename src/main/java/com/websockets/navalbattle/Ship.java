@@ -6,7 +6,10 @@ public class Ship {
 
 	private final Integer positionY;
 
+	private boolean alive;
+
 	public Ship(int x, int y) {
+		alive = true;
 		positionX = Integer.valueOf(x);
 		positionY = Integer.valueOf(y);
 	}
@@ -21,6 +24,14 @@ public class Ship {
 
 	public boolean hasPosition(int x, int y) {
 		return positionX.intValue() == x && positionY.intValue() == y;
+	}
+
+	public boolean isAlive() {
+		return alive;
+	}
+
+	public void sink() {
+		alive = false;
 	}
 	
 	@Override
